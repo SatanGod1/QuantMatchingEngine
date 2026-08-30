@@ -336,3 +336,93 @@ bool OrderBook::modifyOrder(
 
     return false;
 }
+
+bool OrderBook::validateInvariants() const {
+
+    // --------------------------------------------------------
+    // Invariant 1:
+    // If both sides exist, best bid must be less than best ask.
+    // --------------------------------------------------------
+
+    if (!bids.empty() && !asks.empty()) {
+
+        int bestBidPrice = bids.begin()->first;
+        int bestAskPrice = asks.begin()->first;
+
+        if (bestBidPrice >= bestAskPrice) {
+            return false;
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // Invariant 2:
+    // Every bid order must have positive quantity.
+    // --------------------------------------------------------
+
+    for (const auto& [price, orders] : bids) {
+
+        if (price <= 0) {
+            return false;
+        }
+
+        for (const auto& order : orders) {
+
+            if (order.quantity <= 0) {
+                return false;
+            }
+
+            if (order.side != Side::BUY) {
+                return false;
+            }
+
+            if (order.price != price) {
+                return false;
+            }
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // Invariant 3:
+    // Every ask order must have positive quantity.
+    // --------------------------------------------------------
+
+    for (const auto& [price, orders] : asks) {
+
+        if (price <= 0) {
+            return false;
+        }
+
+        for (const auto& order : orders) {
+
+            if (order.quantity <= 0) {
+                return false;
+            }
+
+            if (order.side != Side::SELL) {
+                return false;
+            }
+
+            if (order.price != price) {
+                return false;
+            }
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // Invariant 4:
+    // Every indexed order must have a valid location.
+    // --------------------------------------------------------
+
+    for (const auto& [orderId, location] : orderIndex) {
+
+        if (orderId == 0) {
+            return false;
+        }
+    }
+
+
+    return true;
+}

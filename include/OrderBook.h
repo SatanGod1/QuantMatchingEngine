@@ -49,4 +49,6 @@ public:
         OrderId orderId,
         int newPrice,
         int newQuantity);
+    
+    bool validateInvariants() const;
 };

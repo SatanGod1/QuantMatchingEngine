@@ -46,3 +46,18 @@ target_include_directories(
     PRIVATE
     include
 )
+
+add_executable(edge_case_tests
+    tests/test_edge_cases.cpp
+    src/OrderBook.cpp
+    src/MatchingEngine.cpp
+)
+target_include_directories(edge_case_tests PRIVATE include)
+
+add_executable(randomized_tests
+    tests/test_randomized.cpp
+    src/OrderBook.cpp
+    src/MatchingEngine.cpp
+)
+
+target_include_directories(randomized_tests PRIVATE include)
