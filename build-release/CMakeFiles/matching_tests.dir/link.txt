@@ -1,0 +1,1 @@
+/usr/bin/c++  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/matching_tests.dir/tests/test_matching.cpp.o CMakeFiles/matching_tests.dir/src/OrderBook.cpp.o CMakeFiles/matching_tests.dir/src/MatchingEngine.cpp.o CMakeFiles/matching_tests.dir/src/MarketData.cpp.o CMakeFiles/matching_tests.dir/src/LatencyStats.cpp.o -o matching_tests
