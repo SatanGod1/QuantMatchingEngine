@@ -8,10 +8,19 @@ const OrderBook& MatchingEngine::getOrderBook() const {
     return orderBook;
 }
 
+const std::vector<Event>& MatchingEngine::getEvents() const {
+    return events;
+}
+
 std::vector<Trade>
+
 MatchingEngine::submitOrder(const Order& incomingOrder) {
 
     std::vector<Trade> trades;
+    if (!OrderValidator::validate(incomingOrder))
+    {
+        return trades;
+    }
 
     Order incoming = incomingOrder;
 

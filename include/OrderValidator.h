@@ -6,9 +6,7 @@ class OrderValidator {
 
 public:
 
-    static bool validate(
-        const Order& order
-    ) {
+    static bool validate(const Order& order) {
 
         if (order.id == 0) {
             return false;
