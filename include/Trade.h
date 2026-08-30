@@ -1,25 +1,22 @@
 #pragma once
 
-#include <cstdint>
+#include "Order.h"
 
-struct Trade
-{
-    uint64_t buyOrderId;
-    uint64_t sellOrderId;
+struct Trade {
+    OrderId buyOrderId;
+    OrderId sellOrderId;
 
     int price;
     int quantity;
 
     Trade(
-        uint64_t buyOrderId,
-        uint64_t sellOrderId,
+        OrderId buyOrderId,
+        OrderId sellOrderId,
         int price,
         int quantity
     )
         : buyOrderId(buyOrderId),
           sellOrderId(sellOrderId),
           price(price),
-          quantity(quantity)
-    {
-    }
+          quantity(quantity) {}
 };

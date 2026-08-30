@@ -1,101 +1,52 @@
 #pragma once
 
 #include "Order.h"
+#include "OrderLocation.h"
 
-#include <cstdint>
 #include <deque>
 #include <map>
-#include <vector>
 
-class OrderBook
-{
-public:
-
-    using OrderQueue = std::deque<Order>;
-
-    struct PriceLevelInfo
-    {
-        int price;
-        int quantity;
-    };
+class OrderBook {
 
 private:
 
-    // Highest bid first.
-    std::map<int, OrderQueue, std::greater<int>> bids;
+    std::map<
+        int,
+        std::deque<Order>,
+        std::greater<int>
+    > bids;
 
-    // Lowest ask first.
-    std::map<int, OrderQueue> asks;
+    std::map<
+        int,
+        std::deque<Order>
+    > asks;
+
+    std::unordered_map<OrderId, OrderLocation> orderIndex;
 
 public:
 
-    OrderBook() = default;
+    void addOrder(const Order &order);
 
-    // ============================================================
-    // ADD ORDER
-    // ============================================================
-
-    void addOrder(const Order& order);
-
-    // ============================================================
-    // CANCEL ORDER
-    // ============================================================
-
-    bool cancelOrder(uint64_t orderId);
-
-    // ============================================================
-    // BEST PRICES
-    // ============================================================
+    bool empty() const;
 
     bool hasBids() const;
     bool hasAsks() const;
 
-    int getBestBidPrice() const;
-    int getBestAskPrice() const;
+    int bestBid() const;
+    int bestAsk() const;
 
-    // ============================================================
-    // BEST PRICE ORDERS
-    // ============================================================
+    Order& bestBidOrder();
+    Order& bestAskOrder();
 
-    OrderQueue& getBestBidOrders();
-    const OrderQueue& getBestBidOrders() const;
-
-    OrderQueue& getBestAskOrders();
-    const OrderQueue& getBestAskOrders() const;
-
-    // ============================================================
-    // REMOVE BEST LEVEL
-    // ============================================================
-
-    void removeBestBid();
-    void removeBestAsk();
-
-    // ============================================================
-    // MARKET DATA
-    // ============================================================
-
-    std::vector<PriceLevelInfo>
-    getAllBidLevels() const;
-
-    std::vector<PriceLevelInfo>
-    getAllAskLevels() const;
-
-    std::vector<PriceLevelInfo>
-    getBidLevels(std::size_t depth) const;
-
-    std::vector<PriceLevelInfo>
-    getAskLevels(std::size_t depth) const;
-
-    // ============================================================
-    // DEBUG
-    // ============================================================
+    void removeBestBidOrder();
+    void removeBestAskOrder();
 
     void printBook() const;
 
-    // ============================================================
-    // SIZE
-    // ============================================================
+    bool cancelOrder(OrderId orderId);
 
-    std::size_t bidLevelCount() const;
-    std::size_t askLevelCount() const;
+    bool modifyOrder(
+        OrderId orderId,
+        int newPrice,
+        int newQuantity);
 };

@@ -1,79 +1,198 @@
 #include "OrderBook.h"
 
 #include <iostream>
-#include <stdexcept>
 
-// ============================================================
-// ADD ORDER
-// ============================================================
-
-void OrderBook::addOrder(const Order& order)
+void OrderBook::addOrder(const Order &order)
 {
-    if (order.quantity <= 0)
-    {
-        return;
-    }
 
     if (order.side == Side::BUY)
     {
+
         bids[order.price].push_back(order);
     }
     else
     {
+
         asks[order.price].push_back(order);
+    }
+
+    orderIndex[order.id] = {
+        order.side,
+        order.price};
+}
+
+bool OrderBook::empty() const {
+
+    return bids.empty() && asks.empty();
+}
+
+bool OrderBook::hasBids() const {
+
+    return !bids.empty();
+}
+
+bool OrderBook::hasAsks() const {
+
+    return !asks.empty();
+}
+
+int OrderBook::bestBid() const {
+
+    if (bids.empty()) {
+        return 0;
+    }
+
+    return bids.begin()->first;
+}
+
+int OrderBook::bestAsk() const {
+
+    if (asks.empty()) {
+        return 0;
+    }
+
+    return asks.begin()->first;
+}
+
+Order& OrderBook::bestBidOrder() {
+
+    return bids.begin()->second.front();
+}
+
+Order& OrderBook::bestAskOrder() {
+
+    return asks.begin()->second.front();
+}
+
+void OrderBook::removeBestBidOrder() {
+
+    auto& orders = bids.begin()->second;
+
+    OrderId id = orders.front().id;
+
+    orders.pop_front();
+
+    orderIndex.erase(id);
+
+    if (orders.empty()) {
+        bids.erase(bids.begin());
     }
 }
 
-// ============================================================
-// CANCEL ORDER
-// ============================================================
+void OrderBook::removeBestAskOrder() {
 
-bool OrderBook::cancelOrder(uint64_t orderId)
-{
-    // --------------------------------------------------------
-    // Search bids
-    // --------------------------------------------------------
+    auto& orders = asks.begin()->second;
 
-    for (auto levelIt = bids.begin(); levelIt != bids.end(); ++levelIt)
-    {
-        auto& queue = levelIt->second;
+    OrderId id = orders.front().id;
 
-        for (auto orderIt = queue.begin(); orderIt != queue.end(); ++orderIt)
-        {
-            if (orderIt->id == orderId)
-            {
-                orderIt->status = OrderStatus::CANCELLED;
-                queue.erase(orderIt);
+    orders.pop_front();
 
-                if (queue.empty())
-                {
-                    bids.erase(levelIt);
+    orderIndex.erase(id);
+
+    if (orders.empty()) {
+        asks.erase(asks.begin());
+    }
+}
+
+void OrderBook::printBook() const {
+
+    std::cout << "\n========== ORDER BOOK ==========\n";
+
+    std::cout << "\nASKS\n";
+    std::cout << "-----------------\n";
+
+    for (const auto& [price, orders] : asks) {
+
+        int totalQuantity = 0;
+
+        for (const auto& order : orders) {
+            totalQuantity += order.quantity;
+        }
+
+        std::cout << price
+                  << " -> "
+                  << totalQuantity
+                  << '\n';
+    }
+
+    std::cout << "\nBIDS\n";
+    std::cout << "-----------------\n";
+
+    for (const auto& [price, orders] : bids) {
+
+        int totalQuantity = 0;
+
+        for (const auto& order : orders) {
+            totalQuantity += order.quantity;
+        }
+
+        std::cout << price
+                  << " -> "
+                  << totalQuantity
+                  << '\n';
+    }
+
+    std::cout << "\n================================\n";
+}
+
+bool OrderBook::cancelOrder(OrderId orderId) {
+
+    auto indexIt = orderIndex.find(orderId);
+
+    if (indexIt == orderIndex.end()) {
+        return false;
+    }
+
+    OrderLocation location = indexIt->second;
+
+    if (location.side == Side::BUY) {
+
+        auto priceIt = bids.find(location.price);
+
+        if (priceIt == bids.end()) {
+            return false;
+        }
+
+        auto& orders = priceIt->second;
+
+        for (auto it = orders.begin(); it != orders.end(); ++it) {
+
+            if (it->id == orderId) {
+
+                orders.erase(it);
+
+                if (orders.empty()) {
+                    bids.erase(priceIt);
                 }
+
+                orderIndex.erase(indexIt);
 
                 return true;
             }
         }
     }
 
-    // --------------------------------------------------------
-    // Search asks
-    // --------------------------------------------------------
+    else {
 
-    for (auto levelIt = asks.begin(); levelIt != asks.end(); ++levelIt)
-    {
-        auto& queue = levelIt->second;
+        auto priceIt = asks.find(location.price);
 
-        for (auto orderIt = queue.begin(); orderIt != queue.end(); ++orderIt)
-        {
-            if (orderIt->id == orderId)
-            {
-                orderIt->status = OrderStatus::CANCELLED;
-                queue.erase(orderIt);
+        if (priceIt == asks.end()) {
+            return false;
+        }
 
-                if (queue.empty())
-                {
-                    asks.erase(levelIt);
+        auto& orders = priceIt->second;
+
+        for (auto it = orders.begin(); it != orders.end(); ++it) {
+
+            if (it->id == orderId) {
+
+                orders.erase(it);
+
+                if (orders.empty()) {
+                    asks.erase(priceIt);
                 }
+
+                orderIndex.erase(indexIt);
 
                 return true;
             }
@@ -83,295 +202,137 @@ bool OrderBook::cancelOrder(uint64_t orderId)
     return false;
 }
 
-// ============================================================
-// HAS BIDS
-// ============================================================
+bool OrderBook::modifyOrder(
+    OrderId orderId,
+    int newPrice,
+    int newQuantity
+) {
 
-bool OrderBook::hasBids() const
-{
-    return !bids.empty();
-}
+    auto indexIt = orderIndex.find(orderId);
 
-// ============================================================
-// HAS ASKS
-// ============================================================
-
-bool OrderBook::hasAsks() const
-{
-    return !asks.empty();
-}
-
-// ============================================================
-// BEST BID PRICE
-// ============================================================
-
-int OrderBook::getBestBidPrice() const
-{
-    if (bids.empty())
-    {
-        throw std::runtime_error("No bids");
+    if (indexIt == orderIndex.end()) {
+        return false;
     }
 
-    return bids.begin()->first;
-}
-
-// ============================================================
-// BEST ASK PRICE
-// ============================================================
-
-int OrderBook::getBestAskPrice() const
-{
-    if (asks.empty())
-    {
-        throw std::runtime_error("No asks");
+    if (newQuantity <= 0 || newPrice <= 0) {
+        return false;
     }
 
-    return asks.begin()->first;
-}
+    OrderLocation location = indexIt->second;
 
-// ============================================================
-// BEST BID ORDERS
-// ============================================================
+    /*
+     * Find the existing order.
+     */
 
-OrderBook::OrderQueue& OrderBook::getBestBidOrders()
-{
-    if (bids.empty())
-    {
-        throw std::runtime_error("No bids");
-    }
+    if (location.side == Side::BUY) {
 
-    return bids.begin()->second;
-}
+        auto priceIt = bids.find(location.price);
 
-const OrderBook::OrderQueue&
-OrderBook::getBestBidOrders() const
-{
-    if (bids.empty())
-    {
-        throw std::runtime_error("No bids");
-    }
-
-    return bids.begin()->second;
-}
-
-// ============================================================
-// BEST ASK ORDERS
-// ============================================================
-
-OrderBook::OrderQueue& OrderBook::getBestAskOrders()
-{
-    if (asks.empty())
-    {
-        throw std::runtime_error("No asks");
-    }
-
-    return asks.begin()->second;
-}
-
-const OrderBook::OrderQueue&
-OrderBook::getBestAskOrders() const
-{
-    if (asks.empty())
-    {
-        throw std::runtime_error("No asks");
-    }
-
-    return asks.begin()->second;
-}
-
-// ============================================================
-// REMOVE BEST BID
-// ============================================================
-
-void OrderBook::removeBestBid()
-{
-    if (!bids.empty())
-    {
-        bids.erase(bids.begin());
-    }
-}
-
-// ============================================================
-// REMOVE BEST ASK
-// ============================================================
-
-void OrderBook::removeBestAsk()
-{
-    if (!asks.empty())
-    {
-        asks.erase(asks.begin());
-    }
-}
-
-// ============================================================
-// ALL BID LEVELS
-// ============================================================
-
-std::vector<OrderBook::PriceLevelInfo>
-OrderBook::getAllBidLevels() const
-{
-    std::vector<PriceLevelInfo> result;
-
-    for (const auto& [price, orders] : bids)
-    {
-        int totalQuantity = 0;
-
-        for (const auto& order : orders)
-        {
-            totalQuantity += order.quantity;
+        if (priceIt == bids.end()) {
+            return false;
         }
 
-        result.push_back({price, totalQuantity});
+        auto& orders = priceIt->second;
+
+        for (auto it = orders.begin(); it != orders.end(); ++it) {
+
+            if (it->id == orderId) {
+
+                /*
+                 * Quantity decreased and price unchanged.
+                 * Preserve time priority.
+                 */
+
+                if (
+                    newPrice == it->price &&
+                    newQuantity < it->quantity
+                ) {
+
+                    it->quantity = newQuantity;
+
+                    return true;
+                }
+
+                /*
+                 * Otherwise remove and reinsert.
+                 */
+
+                Order updatedOrder(
+                    it->id,
+                    it->side,
+                    newPrice,
+                    newQuantity
+                );
+
+                orders.erase(it);
+
+                if (orders.empty()) {
+                    bids.erase(priceIt);
+                }
+
+                orderIndex.erase(orderId);
+
+                addOrder(updatedOrder);
+
+                return true;
+            }
+        }
     }
 
-    return result;
-}
+    else {
 
-// ============================================================
-// ALL ASK LEVELS
-// ============================================================
+        auto priceIt = asks.find(location.price);
 
-std::vector<OrderBook::PriceLevelInfo>
-OrderBook::getAllAskLevels() const
-{
-    std::vector<PriceLevelInfo> result;
-
-    for (const auto& [price, orders] : asks)
-    {
-        int totalQuantity = 0;
-
-        for (const auto& order : orders)
-        {
-            totalQuantity += order.quantity;
+        if (priceIt == asks.end()) {
+            return false;
         }
 
-        result.push_back({price, totalQuantity});
+        auto& orders = priceIt->second;
+
+        for (auto it = orders.begin(); it != orders.end(); ++it) {
+
+            if (it->id == orderId) {
+
+                /*
+                 * Quantity decreased and price unchanged.
+                 * Preserve time priority.
+                 */
+
+                if (
+                    newPrice == it->price &&
+                    newQuantity < it->quantity
+                ) {
+
+                    it->quantity = newQuantity;
+
+                    return true;
+                }
+
+                /*
+                 * Otherwise remove and reinsert.
+                 */
+
+                Order updatedOrder(
+                    it->id,
+                    it->side,
+                    newPrice,
+                    newQuantity
+                );
+
+                orders.erase(it);
+
+                if (orders.empty()) {
+                    asks.erase(priceIt);
+                }
+
+                orderIndex.erase(orderId);
+
+                addOrder(updatedOrder);
+
+                return true;
+            }
+        }
     }
 
-    return result;
-}
-
-// ============================================================
-// BID LEVELS WITH DEPTH
-// ============================================================
-
-std::vector<OrderBook::PriceLevelInfo>
-OrderBook::getBidLevels(std::size_t depth) const
-{
-    std::vector<PriceLevelInfo> result;
-
-    std::size_t count = 0;
-
-    for (const auto& [price, orders] : bids)
-    {
-        if (count >= depth)
-        {
-            break;
-        }
-
-        int totalQuantity = 0;
-
-        for (const auto& order : orders)
-        {
-            totalQuantity += order.quantity;
-        }
-
-        result.push_back({price, totalQuantity});
-
-        ++count;
-    }
-
-    return result;
-}
-
-// ============================================================
-// ASK LEVELS WITH DEPTH
-// ============================================================
-
-std::vector<OrderBook::PriceLevelInfo>
-OrderBook::getAskLevels(std::size_t depth) const
-{
-    std::vector<PriceLevelInfo> result;
-
-    std::size_t count = 0;
-
-    for (const auto& [price, orders] : asks)
-    {
-        if (count >= depth)
-        {
-            break;
-        }
-
-        int totalQuantity = 0;
-
-        for (const auto& order : orders)
-        {
-            totalQuantity += order.quantity;
-        }
-
-        result.push_back({price, totalQuantity});
-
-        ++count;
-    }
-
-    return result;
-}
-
-// ============================================================
-// PRINT BOOK
-// ============================================================
-
-void OrderBook::printBook() const
-{
-    std::cout << "\n========== ORDER BOOK ==========\n";
-
-    std::cout << "\nASKS:\n";
-
-    for (auto it = asks.rbegin(); it != asks.rend(); ++it)
-    {
-        int totalQuantity = 0;
-
-        for (const auto& order : it->second)
-        {
-            totalQuantity += order.quantity;
-        }
-
-        std::cout
-            << "Price: " << it->first
-            << " | Quantity: " << totalQuantity
-            << '\n';
-    }
-
-    std::cout << "\nBIDS:\n";
-
-    for (const auto& [price, orders] : bids)
-    {
-        int totalQuantity = 0;
-
-        for (const auto& order : orders)
-        {
-            totalQuantity += order.quantity;
-        }
-
-        std::cout
-            << "Price: " << price
-            << " | Quantity: " << totalQuantity
-            << '\n';
-    }
-
-    std::cout << "\n===============================\n";
-}
-
-// ============================================================
-// LEVEL COUNTS
-// ============================================================
-
-std::size_t OrderBook::bidLevelCount() const
-{
-    return bids.size();
-}
-
-std::size_t OrderBook::askLevelCount() const
-{
-    return asks.size();
+    return false;
 }

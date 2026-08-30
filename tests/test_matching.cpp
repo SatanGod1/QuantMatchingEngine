@@ -1,328 +1,414 @@
 #include "MatchingEngine.h"
+#include "Event.h"
 
 #include <cassert>
 #include <iostream>
 
-void testFullMatch()
-{
+void testBasicMatch() {
+
     MatchingEngine engine;
 
     engine.submitOrder(
-        Order(
-            1,
-            Side::SELL,
-            OrderType::LIMIT,
-            10000,
-            50,
-            1
-        )
+        Order(1, Side::SELL, 102, 100)
     );
 
-    engine.submitOrder(
-        Order(
-            2,
-            Side::BUY,
-            OrderType::LIMIT,
-            10000,
-            50,
-            2
-        )
+    auto trades = engine.submitOrder(
+        Order(2, Side::BUY, 102, 100)
     );
-
-    const auto& trades =
-        engine.getTrades();
 
     assert(trades.size() == 1);
-    assert(trades[0].quantity == 50);
-    assert(trades[0].price == 10000);
+
+    assert(trades[0].quantity == 100);
+    assert(trades[0].price == 102);
+
     assert(trades[0].buyOrderId == 2);
     assert(trades[0].sellOrderId == 1);
 
-    assert(!engine.getOrderBook().hasBids());
-    assert(!engine.getOrderBook().hasAsks());
+    std::cout << "testBasicMatch PASSED\n";
 }
 
-void testPartialFill()
-{
+void testPartialFill() {
+
     MatchingEngine engine;
 
     engine.submitOrder(
-        Order(
-            1,
-            Side::SELL,
-            OrderType::LIMIT,
-            10000,
-            50,
-            1
-        )
+        Order(1, Side::SELL, 102, 100)
     );
 
-    engine.submitOrder(
-        Order(
-            2,
-            Side::BUY,
-            OrderType::LIMIT,
-            10000,
-            100,
-            2
-        )
+    auto trades = engine.submitOrder(
+        Order(2, Side::BUY, 102, 40)
     );
-
-    const auto& trades =
-        engine.getTrades();
 
     assert(trades.size() == 1);
-    assert(trades[0].quantity == 50);
 
-    assert(engine.getOrderBook().hasBids());
-    assert(!engine.getOrderBook().hasAsks());
+    assert(trades[0].quantity == 40);
+    assert(trades[0].price == 102);
 
     assert(
-        engine.getOrderBook().getBestBidPrice()
-        == 10000
+        engine.getOrderBook().bestAsk() == 102
     );
 
-    const auto& orders =
-        engine.getOrderBook().getBestBidOrders();
-
-    assert(orders.size() == 1);
-    assert(orders.front().quantity == 50);
+    std::cout << "testPartialFill PASSED\n";
 }
 
-void testPricePriority()
-{
-    MatchingEngine engine;
+void testMultiplePriceLevels() {
 
-    // Older/lower ask.
-    engine.submitOrder(
-        Order(
-            1,
-            Side::SELL,
-            OrderType::LIMIT,
-            10100,
-            50,
-            1
-        )
-    );
-
-    // Better ask.
-    engine.submitOrder(
-        Order(
-            2,
-            Side::SELL,
-            OrderType::LIMIT,
-            10000,
-            50,
-            2
-        )
-    );
-
-    engine.submitOrder(
-        Order(
-            3,
-            Side::BUY,
-            OrderType::LIMIT,
-            10100,
-            70,
-            3
-        )
-    );
-
-    const auto& trades =
-        engine.getTrades();
-
-    assert(trades.size() == 2);
-
-    // Best ask first.
-    assert(trades[0].sellOrderId == 2);
-    assert(trades[0].price == 10000);
-    assert(trades[0].quantity == 50);
-
-    assert(trades[1].sellOrderId == 1);
-    assert(trades[1].price == 10100);
-    assert(trades[1].quantity == 20);
-}
-
-void testTimePriority()
-{
     MatchingEngine engine;
 
     engine.submitOrder(
-        Order(
-            1,
-            Side::SELL,
-            OrderType::LIMIT,
-            10000,
-            50,
-            1
-        )
+        Order(1, Side::SELL, 102, 40)
     );
 
     engine.submitOrder(
-        Order(
-            2,
-            Side::SELL,
-            OrderType::LIMIT,
-            10000,
-            100,
-            2
-        )
+        Order(2, Side::SELL, 103, 100)
     );
 
-    engine.submitOrder(
-        Order(
-            3,
-            Side::BUY,
-            OrderType::LIMIT,
-            10000,
-            75,
-            3
-        )
+    auto trades = engine.submitOrder(
+        Order(3, Side::BUY, 103, 70)
     );
-
-    const auto& trades =
-        engine.getTrades();
 
     assert(trades.size() == 2);
 
-    // Earlier order gets filled first.
+    assert(trades[0].price == 102);
+    assert(trades[0].quantity == 40);
+
+    assert(trades[1].price == 103);
+    assert(trades[1].quantity == 30);
+
+    assert(
+        engine.getOrderBook().bestAsk() == 103
+    );
+
+    std::cout << "testMultiplePriceLevels PASSED\n";
+}
+
+void testFIFO() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(1, Side::SELL, 102, 100)
+    );
+
+    engine.submitOrder(
+        Order(2, Side::SELL, 102, 200)
+    );
+
+    engine.submitOrder(
+        Order(3, Side::SELL, 102, 300)
+    );
+
+    auto trades = engine.submitOrder(
+        Order(4, Side::BUY, 102, 150)
+    );
+
+    assert(trades.size() == 2);
+
     assert(trades[0].sellOrderId == 1);
-    assert(trades[0].quantity == 50);
+    assert(trades[0].quantity == 100);
 
     assert(trades[1].sellOrderId == 2);
-    assert(trades[1].quantity == 25);
+    assert(trades[1].quantity == 50);
+
+    std::cout << "testFIFO PASSED\n";
 }
 
-void testNoMatch()
-{
+void testNoMatch() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(1, Side::SELL, 105, 100)
+    );
+
+    auto trades = engine.submitOrder(
+        Order(2, Side::BUY, 104, 100)
+    );
+
+    assert(trades.empty());
+
+    assert(
+        engine.getOrderBook().bestAsk() == 105
+    );
+
+    assert(
+        engine.getOrderBook().bestBid() == 104
+    );
+
+    std::cout << "testNoMatch PASSED\n";
+}
+
+void testCancellation() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(1, Side::BUY, 101, 100)
+    );
+
+    engine.submitOrder(
+        Order(2, Side::BUY, 101, 200)
+    );
+
+    engine.submitOrder(
+        Order(3, Side::BUY, 100, 300)
+    );
+
+    bool cancelled =
+        engine.cancelOrder(2);
+
+    assert(cancelled);
+
+    assert(
+        engine.getOrderBook().bestBid() == 101
+    );
+
+    std::cout << "testCancellation PASSED\n";
+}
+
+void testModifyQuantityDecrease() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(1, Side::BUY, 101, 100)
+    );
+
+    engine.submitOrder(
+        Order(2, Side::BUY, 101, 200)
+    );
+
+    bool modified =
+        engine.modifyOrder(2, 101, 150);
+
+    assert(modified);
+
+    std::cout
+        << "testModifyQuantityDecrease PASSED\n";
+}
+
+void testModifyPrice() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(1, Side::BUY, 101, 100)
+    );
+
+    bool modified =
+        engine.modifyOrder(1, 102, 100);
+
+    assert(modified);
+
+    assert(
+        engine.getOrderBook().bestBid() == 102
+    );
+
+    std::cout
+        << "testModifyPrice PASSED\n";
+}
+
+void testModifyQuantityIncrease() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(1, Side::BUY, 101, 100)
+    );
+
+    bool modified =
+        engine.modifyOrder(1, 101, 200);
+
+    assert(modified);
+
+    assert(
+        engine.getOrderBook().bestBid() == 101
+    );
+
+    std::cout
+        << "testModifyQuantityIncrease PASSED\n";
+}
+
+void testInvalidModify() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(1, Side::BUY, 101, 100)
+    );
+
+    bool modified =
+        engine.modifyOrder(999, 102, 100);
+
+    assert(!modified);
+
+    std::cout
+        << "testInvalidModify PASSED\n";
+}
+
+void testMarketBuy() {
+
     MatchingEngine engine;
 
     engine.submitOrder(
         Order(
             1,
             Side::SELL,
-            OrderType::LIMIT,
-            10500,
-            50,
-            1
+            102,
+            40
         )
     );
 
     engine.submitOrder(
         Order(
             2,
-            Side::BUY,
-            OrderType::LIMIT,
-            10000,
-            50,
-            2
-        )
-    );
-
-    assert(engine.getTrades().empty());
-
-    assert(engine.getOrderBook().hasBids());
-    assert(engine.getOrderBook().hasAsks());
-
-    assert(
-        engine.getOrderBook().getBestBidPrice()
-        == 10000
-    );
-
-    assert(
-        engine.getOrderBook().getBestAskPrice()
-        == 10500
-    );
-}
-
-void testCancel()
-{
-    MatchingEngine engine;
-
-    engine.submitOrder(
-        Order(
-            1,
-            Side::BUY,
-            OrderType::LIMIT,
-            10000,
-            50,
-            1
-        )
-    );
-
-    assert(engine.getOrderBook().hasBids());
-
-    bool result =
-        engine.cancelOrder(1);
-
-    assert(result);
-    assert(!engine.getOrderBook().hasBids());
-
-    // Cancelling again should fail.
-    assert(!engine.cancelOrder(1));
-}
-
-void testMarketBuy()
-{
-    MatchingEngine engine;
-
-    engine.submitOrder(
-        Order(
-            1,
             Side::SELL,
-            OrderType::LIMIT,
-            10000,
-            50,
-            1
+            103,
+            100
         )
     );
 
-    engine.submitOrder(
-        Order(
-            2,
-            Side::SELL,
-            OrderType::LIMIT,
-            10100,
-            50,
-            2
-        )
-    );
-
-    engine.submitOrder(
-        Order(
-            3,
-            Side::BUY,
-            OrderType::MARKET,
-            0,
-            75,
-            3
-        )
-    );
-
-    const auto& trades =
-        engine.getTrades();
+    auto trades =
+        engine.submitOrder(
+            Order(
+                3,
+                Side::BUY,
+                OrderType::MARKET,
+                0,
+                70
+            )
+        );
 
     assert(trades.size() == 2);
 
-    assert(trades[0].quantity == 50);
-    assert(trades[0].price == 10000);
+    assert(trades[0].price == 102);
+    assert(trades[0].quantity == 40);
 
-    assert(trades[1].quantity == 25);
-    assert(trades[1].price == 10100);
-}
+    assert(trades[1].price == 103);
+    assert(trades[1].quantity == 30);
 
-int main()
-{
-    testFullMatch();
-    testPartialFill();
-    testPricePriority();
-    testTimePriority();
-    testNoMatch();
-    testCancel();
-    testMarketBuy();
+    assert(
+        engine.getOrderBook().bestAsk() == 103
+    );
 
     std::cout
-        << "All tests passed!\n";
+        << "testMarketBuy PASSED\n";
+}
+
+void testMarketSell() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(
+            1,
+            Side::BUY,
+            103,
+            40
+        )
+    );
+
+    engine.submitOrder(
+        Order(
+            2,
+            Side::BUY,
+            102,
+            100
+        )
+    );
+
+    auto trades =
+        engine.submitOrder(
+            Order(
+                3,
+                Side::SELL,
+                OrderType::MARKET,
+                0,
+                70
+            )
+        );
+
+    assert(trades.size() == 2);
+
+    assert(trades[0].price == 103);
+    assert(trades[0].quantity == 40);
+
+    assert(trades[1].price == 102);
+    assert(trades[1].quantity == 30);
+
+    assert(
+        engine.getOrderBook().bestBid() == 102
+    );
+
+    std::cout
+        << "testMarketSell PASSED\n";
+}
+
+void testMarketOrderInsufficientLiquidity() {
+
+    MatchingEngine engine;
+
+    engine.submitOrder(
+        Order(
+            1,
+            Side::SELL,
+            102,
+            40
+        )
+    );
+
+    auto trades =
+        engine.submitOrder(
+            Order(
+                2,
+                Side::BUY,
+                OrderType::MARKET,
+                0,
+                100
+            )
+        );
+
+    assert(trades.size() == 1);
+
+    assert(trades[0].quantity == 40);
+
+    // No asks remain.
+    assert(
+        !engine.getOrderBook().hasAsks()
+    );
+
+    // The unfilled market quantity
+    // must NOT become a bid.
+    assert(
+        !engine.getOrderBook().hasBids()
+    );
+
+    std::cout
+        << "testMarketOrderInsufficientLiquidity PASSED\n";
+}
+
+
+
+int main() {
+
+    testBasicMatch();
+    testPartialFill();
+    testMultiplePriceLevels();
+    testFIFO();
+    testNoMatch();
+    testCancellation();
+
+    testModifyQuantityDecrease();
+    testModifyPrice();
+    testModifyQuantityIncrease();
+    testInvalidModify();
+
+    testMarketBuy();
+    testMarketSell();
+    testMarketOrderInsufficientLiquidity();
+
+    std::cout
+        << "\nAll tests PASSED!\n";
 
     return 0;
 }

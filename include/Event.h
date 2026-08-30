@@ -1,23 +1,55 @@
 #pragma once
 
+#include "Order.h"
+
 #include <cstdint>
 
-enum class EventType
-{
+enum class EventType {
+
     ORDER_ACCEPTED,
+
     ORDER_REJECTED,
-    TRADE_EXECUTED,
-    ORDER_CANCELLED
+
+    ORDER_ADDED,
+
+    ORDER_FILLED,
+
+    ORDER_CANCELLED,
+
+    ORDER_MODIFIED,
+
+    TRADE_EXECUTED
 };
 
-struct Event
-{
+
+struct Event {
+
     EventType type;
 
-    uint64_t orderId;
-    uint64_t buyOrderId;
-    uint64_t sellOrderId;
+    OrderId orderId;
+
+    OrderId relatedOrderId;
+
+    // Add these two
+    OrderId buyOrderId;
+    OrderId sellOrderId;
 
     int price;
     int quantity;
+
+    Event(
+        EventType type,
+        OrderId orderId = 0,
+        OrderId relatedOrderId = 0,
+        int price = 0,
+        int quantity = 0
+    )
+        : type(type),
+          orderId(orderId),
+          relatedOrderId(relatedOrderId),
+          buyOrderId(0),
+          sellOrderId(0),
+          price(price),
+          quantity(quantity)
+    {}
 };

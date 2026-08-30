@@ -1,270 +1,125 @@
 #include "MatchingEngine.h"
+#include "OrderValidator.h"
 
 #include <algorithm>
 
-// ============================================================
-// SUBMIT ORDER
-// ============================================================
+const OrderBook& MatchingEngine::getOrderBook() const {
 
-void MatchingEngine::submitOrder(Order order)
-{
-    events.push_back({
-        EventType::ORDER_ACCEPTED,
-        order.id,
-        0,
-        0,
-        order.price,
-        order.quantity
-    });
-
-    // ========================================================
-    // MATCH
-    // ========================================================
-
-    if (order.side == Side::BUY)
-    {
-        matchBuy(order);
-    }
-    else
-    {
-        matchSell(order);
-    }
-
-    // ========================================================
-    // RESTING LIMIT ORDER
-    // ========================================================
-
-    if (order.quantity > 0 &&
-        order.type == OrderType::LIMIT)
-    {
-        if (order.quantity < order.originalQuantity)
-        {
-            order.status = OrderStatus::PARTIALLY_FILLED;
-        }
-        else
-        {
-            order.status = OrderStatus::NEW;
-        }
-
-        orderBook.addOrder(order);
-    }
-    else if (order.quantity == 0)
-    {
-        order.status = OrderStatus::FILLED;
-    }
+    return orderBook;
 }
 
-// ============================================================
-// BUY MATCHING
-// ============================================================
+std::vector<Trade>
+MatchingEngine::submitOrder(const Order& incomingOrder) {
 
-void MatchingEngine::matchBuy(Order& order)
-{
-    while (
-        order.quantity > 0 &&
-        orderBook.hasAsks()
-    )
-    {
-        const int bestAsk =
-            orderBook.getBestAskPrice();
+    std::vector<Trade> trades;
 
-        // LIMIT order cannot cross this ask.
-        if (
-            order.type == OrderType::LIMIT &&
-            bestAsk > order.price
-        )
-        {
-            break;
-        }
+    Order incoming = incomingOrder;
 
-        auto& sellOrders =
-            orderBook.getBestAskOrders();
+    // BUY
+    if (incoming.side == Side::BUY) {
 
-        if (sellOrders.empty())
-        {
-            break;
-        }
+        while (
+            incoming.quantity > 0 &&
+            orderBook.hasAsks() &&
+            (
+                incoming.type == OrderType::MARKET ||
+                orderBook.bestAsk() <= incoming.price
+            )
+        ) {
 
-        Order& sellOrder =
-            sellOrders.front();
+            Order& sellOrder =
+                orderBook.bestAskOrder();
 
-        const int quantity =
-            std::min(
-                order.quantity,
-                sellOrder.quantity
+            int tradeQuantity =
+                std::min(
+                    incoming.quantity,
+                    sellOrder.quantity
+                );
+
+            int tradePrice =
+                sellOrder.price;
+
+            trades.emplace_back(
+                incoming.id,
+                sellOrder.id,
+                tradePrice,
+                tradeQuantity
             );
 
-        Trade trade =
-            executeTrade(
-                order,
-                sellOrder,
-                quantity
-            );
+            incoming.quantity -= tradeQuantity;
+            sellOrder.quantity -= tradeQuantity;
 
-        trades.push_back(trade);
-
-        events.push_back({
-            EventType::TRADE_EXECUTED,
-            0,
-            trade.buyOrderId,
-            trade.sellOrderId,
-            trade.price,
-            trade.quantity
-        });
-
-        order.quantity -= quantity;
-        sellOrder.quantity -= quantity;
-
-        if (sellOrder.quantity == 0)
-        {
-            orderBook.removeBestAsk();
+            if (sellOrder.quantity == 0) {
+                orderBook.removeBestAskOrder();
+            }
         }
     }
-}
 
-// ============================================================
-// SELL MATCHING
-// ============================================================
+    // SELL
+    else {
 
-void MatchingEngine::matchSell(Order& order)
-{
-    while (
-        order.quantity > 0 &&
-        orderBook.hasBids()
-    )
-    {
-        const int bestBid =
-            orderBook.getBestBidPrice();
+        while (
+            incoming.quantity > 0 &&
+            orderBook.hasBids() &&
+            (
+                incoming.type == OrderType::MARKET ||
+                orderBook.bestBid() >= incoming.price
+            )
+        ) {
 
-        // LIMIT order cannot cross this bid.
-        if (
-            order.type == OrderType::LIMIT &&
-            bestBid < order.price
-        )
-        {
-            break;
-        }
+            Order& buyOrder =
+                orderBook.bestBidOrder();
 
-        auto& buyOrders =
-            orderBook.getBestBidOrders();
+            int tradeQuantity =
+                std::min(
+                    incoming.quantity,
+                    buyOrder.quantity
+                );
 
-        if (buyOrders.empty())
-        {
-            break;
-        }
+            int tradePrice =
+                buyOrder.price;
 
-        Order& buyOrder =
-            buyOrders.front();
-
-        const int quantity =
-            std::min(
-                order.quantity,
-                buyOrder.quantity
+            trades.emplace_back(
+                buyOrder.id,
+                incoming.id,
+                tradePrice,
+                tradeQuantity
             );
 
-        Trade trade =
-            executeTrade(
-                buyOrder,
-                order,
-                quantity
-            );
+            incoming.quantity -= tradeQuantity;
+            buyOrder.quantity -= tradeQuantity;
 
-        trades.push_back(trade);
-
-        events.push_back({
-            EventType::TRADE_EXECUTED,
-            0,
-            trade.buyOrderId,
-            trade.sellOrderId,
-            trade.price,
-            trade.quantity
-        });
-
-        buyOrder.quantity -= quantity;
-        order.quantity -= quantity;
-
-        if (buyOrder.quantity == 0)
-        {
-            orderBook.removeBestBid();
+            if (buyOrder.quantity == 0) {
+                orderBook.removeBestBidOrder();
+            }
         }
     }
-}
 
-// ============================================================
-// EXECUTE TRADE
-// ============================================================
-
-Trade MatchingEngine::executeTrade(
-    const Order& buyOrder,
-    const Order& sellOrder,
-    int quantity
-)
-{
-    // Trade executes at the resting order's price.
-    return Trade(
-        buyOrder.id,
-        sellOrder.id,
-        sellOrder.price,
-        quantity
-    );
-}
-
-// ============================================================
-// CANCEL
-// ============================================================
-
-bool MatchingEngine::cancelOrder(uint64_t orderId)
-{
-    bool cancelled =
-        orderBook.cancelOrder(orderId);
-
-    if (cancelled)
-    {
-        events.push_back({
-            EventType::ORDER_CANCELLED,
-            orderId,
-            0,
-            0,
-            0,
-            0
-        });
+    // Only LIMIT orders can rest in the book
+    if (
+        incoming.quantity > 0 &&
+        incoming.type == OrderType::LIMIT
+    ) {
+        orderBook.addOrder(incoming);
     }
 
-    return cancelled;
-}
-
-// ============================================================
-// GET TRADES
-// ============================================================
-
-const std::vector<Trade>&
-MatchingEngine::getTrades() const
-{
     return trades;
 }
 
-// ============================================================
-// GET EVENTS
-// ============================================================
+bool MatchingEngine::cancelOrder(OrderId orderId) {
 
-const std::vector<Event>&
-MatchingEngine::getEvents() const
-{
-    return events;
+    return orderBook.cancelOrder(orderId);
 }
 
-// ============================================================
-// GET ORDER BOOK
-// ============================================================
+bool MatchingEngine::modifyOrder(
+    OrderId orderId,
+    int newPrice,
+    int newQuantity
+) {
 
-const OrderBook&
-MatchingEngine::getOrderBook() const
-{
-    return orderBook;
-}
-
-OrderBook&
-MatchingEngine::getOrderBook()
-{
-    return orderBook;
+    return orderBook.modifyOrder(
+        orderId,
+        newPrice,
+        newQuantity
+    );
 }

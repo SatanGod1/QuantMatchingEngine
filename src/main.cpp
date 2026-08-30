@@ -1,102 +1,50 @@
 #include "MatchingEngine.h"
-#include "MarketData.h"
 
 #include <iostream>
 
-int main()
-{
+int main() {
+
     MatchingEngine engine;
 
-    // ============================================================
-    // ADD SELL ORDERS
-    // ============================================================
-
+    // Add initial liquidity
     engine.submitOrder(
-        Order(
-            1,
-            Side::SELL,
-            OrderType::LIMIT,
-            10200,
-            40,
-            1
-        )
+        Order(1, Side::SELL, 102, 40)
     );
 
     engine.submitOrder(
-        Order(
-            2,
-            Side::SELL,
-            OrderType::LIMIT,
-            10300,
-            100,
-            2
-        )
+        Order(2, Side::SELL, 103, 100)
     );
-
-    // ============================================================
-    // BUY ORDER
-    // ============================================================
 
     engine.submitOrder(
-        Order(
-            3,
-            Side::BUY,
-            OrderType::LIMIT,
-            10300,
-            70,
-            3
-        )
+        Order(3, Side::BUY, 101, 50)
     );
 
-    // ============================================================
-    // PRINT TRADES
-    // ============================================================
+    std::cout << "Initial Order Book:\n";
 
-    std::cout << "\nTRADES\n";
-    std::cout << "======\n";
+    engine.getOrderBook().printBook();
 
-    const auto& trades =
-        engine.getTrades();
+    // Incoming order
+    auto trades = engine.submitOrder(
+        Order(4, Side::BUY, 103, 70)
+    );
 
-    for (const auto& trade : trades)
-    {
+    std::cout << "\nTrades:\n";
+
+    for (const auto& trade : trades) {
+
         std::cout
-            << "Buy Order: " << trade.buyOrderId
-            << " | Sell Order: " << trade.sellOrderId
-            << " | Price: " << trade.price
-            << " | Quantity: " << trade.quantity
+            << "BUY Order "
+            << trade.buyOrderId
+            << " matched SELL Order "
+            << trade.sellOrderId
+            << " -> "
+            << trade.quantity
+            << " @ "
+            << trade.price
             << '\n';
     }
 
-    // ============================================================
-    // PRINT EVENTS
-    // ============================================================
-
-    std::cout << "\nEVENTS\n";
-    std::cout << "======\n";
-
-    const auto& events =
-        engine.getEvents();
-
-    for (const auto& event : events)
-    {
-        std::cout
-            << "Event type: "
-            << static_cast<int>(event.type)
-            << " | Order ID: "
-            << event.orderId
-            << " | Price: "
-            << event.price
-            << " | Quantity: "
-            << event.quantity
-            << '\n';
-    }
-
-    // ============================================================
-    // PRINT BOOK
-    // ============================================================
-
-    std::cout << "\nFINAL BOOK\n";
+    std::cout << "\nFinal Order Book:\n";
 
     engine.getOrderBook().printBook();
 

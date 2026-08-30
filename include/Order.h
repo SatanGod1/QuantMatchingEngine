@@ -2,49 +2,54 @@
 
 #include <cstdint>
 
-enum class Side
-{
+using OrderId = std::uint64_t;
+
+enum class Side {
     BUY,
     SELL
 };
 
-enum class OrderType
-{
+enum class OrderType {
     LIMIT,
     MARKET
 };
 
-enum class OrderStatus
-{
-    NEW,
-    PARTIALLY_FILLED,
-    FILLED,
-    CANCELLED
-};
+struct Order {
 
-class Order
-{
-public:
-    uint64_t id;
+    OrderId id;
+
     Side side;
+
     OrderType type;
 
     int price;
+
     int quantity;
-    int originalQuantity;
 
-    uint64_t timestamp;
-    OrderStatus status;
-
+    // Existing limit-order constructor
     Order(
-        uint64_t id,
+        OrderId id,
+        Side side,
+        int price,
+        int quantity
+    )
+        : id(id),
+          side(side),
+          type(OrderType::LIMIT),
+          price(price),
+          quantity(quantity) {}
+
+    // Market/general constructor
+    Order(
+        OrderId id,
         Side side,
         OrderType type,
         int price,
-        int quantity,
-        uint64_t timestamp
-    );
-
-    bool isBuy() const;
-    bool isSell() const;
+        int quantity
+    )
+        : id(id),
+          side(side),
+          type(type),
+          price(price),
+          quantity(quantity) {}
 };

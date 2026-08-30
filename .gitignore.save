@@ -1,0 +1,33 @@
+build/
+.vscode/
+.DS_Store
+*.o
+*.out
+*.dSYM
+# Build directories
+build/
+build-release/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled binaries
+*.o
+*.out
+*.exe
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+
+x
+X
+^X
+
