@@ -13,14 +13,30 @@ const std::vector<Event>& MatchingEngine::getEvents() const {
 }
 
 std::vector<Trade>
-
 MatchingEngine::submitOrder(const Order& incomingOrder) {
 
     std::vector<Trade> trades;
-    if (!OrderValidator::validate(incomingOrder))
-    {
+
+    if (!OrderValidator::validate(incomingOrder)) {
+
+        events.emplace_back(
+            EventType::ORDER_REJECTED,
+            incomingOrder.id,
+            0,
+            incomingOrder.price,
+            incomingOrder.quantity
+        );
+
         return trades;
     }
+
+    events.emplace_back(
+        EventType::ORDER_ACCEPTED,
+        incomingOrder.id,
+        0,
+        incomingOrder.price,
+        incomingOrder.quantity
+    );
 
     Order incoming = incomingOrder;
 
@@ -55,10 +71,31 @@ MatchingEngine::submitOrder(const Order& incomingOrder) {
                 tradeQuantity
             );
 
+            Event tradeEvent(
+                EventType::TRADE_EXECUTED,
+                incoming.id,
+                sellOrder.id,
+                tradePrice,
+                tradeQuantity);
+
+            tradeEvent.buyOrderId = incoming.id;
+            tradeEvent.sellOrderId = sellOrder.id;
+
+            events.push_back(tradeEvent);
+
             incoming.quantity -= tradeQuantity;
             sellOrder.quantity -= tradeQuantity;
 
-            if (sellOrder.quantity == 0) {
+            if (sellOrder.quantity == 0)
+            {
+
+                events.emplace_back(
+                    EventType::ORDER_FILLED,
+                    sellOrder.id,
+                    incoming.id,
+                    tradePrice,
+                    tradeQuantity);
+
                 orderBook.removeBestAskOrder();
             }
         }
@@ -95,21 +132,61 @@ MatchingEngine::submitOrder(const Order& incomingOrder) {
                 tradeQuantity
             );
 
+            Event tradeEvent(
+                EventType::TRADE_EXECUTED,
+                incoming.id,
+                buyOrder.id,
+                tradePrice,
+                tradeQuantity);
+
+            tradeEvent.buyOrderId = buyOrder.id;
+            tradeEvent.sellOrderId = incoming.id;
+
+            events.push_back(tradeEvent);
+
             incoming.quantity -= tradeQuantity;
             buyOrder.quantity -= tradeQuantity;
 
-            if (buyOrder.quantity == 0) {
+            if (buyOrder.quantity == 0)
+            {
+
+                events.emplace_back(
+                    EventType::ORDER_FILLED,
+                    buyOrder.id,
+                    incoming.id,
+                    tradePrice,
+                    tradeQuantity);
+
                 orderBook.removeBestBidOrder();
             }
         }
     }
 
+    if (incoming.quantity == 0)
+    {
+
+        events.emplace_back(
+            EventType::ORDER_FILLED,
+            incoming.id,
+            0,
+            incoming.price,
+            incomingOrder.quantity);
+    }
+
     // Only LIMIT orders can rest in the book
     if (
         incoming.quantity > 0 &&
-        incoming.type == OrderType::LIMIT
-    ) {
+        incoming.type == OrderType::LIMIT)
+    {
+
         orderBook.addOrder(incoming);
+
+        events.emplace_back(
+            EventType::ORDER_ADDED,
+            incoming.id,
+            0,
+            incoming.price,
+            incoming.quantity);
     }
 
     return trades;
@@ -117,7 +194,17 @@ MatchingEngine::submitOrder(const Order& incomingOrder) {
 
 bool MatchingEngine::cancelOrder(OrderId orderId) {
 
-    return orderBook.cancelOrder(orderId);
+    bool cancelled = orderBook.cancelOrder(orderId);
+
+    if (cancelled) {
+
+        events.emplace_back(
+            EventType::ORDER_CANCELLED,
+            orderId
+        );
+    }
+
+    return cancelled;
 }
 
 bool MatchingEngine::modifyOrder(
@@ -126,9 +213,22 @@ bool MatchingEngine::modifyOrder(
     int newQuantity
 ) {
 
-    return orderBook.modifyOrder(
+    bool modified = orderBook.modifyOrder(
         orderId,
         newPrice,
         newQuantity
     );
+
+    if (modified) {
+
+        events.emplace_back(
+            EventType::ORDER_MODIFIED,
+            orderId,
+            0,
+            newPrice,
+            newQuantity
+        );
+    }
+
+    return modified;
 }
