@@ -22,6 +22,22 @@ add_executable(
     src/MatchingEngine.cpp
 )
 
+add_executable(matching_benchmark
+    benchmarks/benchmark.cpp
+    src/OrderBook.cpp
+    src/MatchingEngine.cpp
+)
+
+target_include_directories(matching_benchmark PRIVATE include)
+
+add_executable(latency_benchmark
+    benchmarks/latency_benchmark.cpp
+    src/OrderBook.cpp
+    src/MatchingEngine.cpp
+)
+
+target_include_directories(latency_benchmark PRIVATE include)
+
 target_include_directories(
     matching_engine
     PRIVATE
