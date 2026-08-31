@@ -228,7 +228,7 @@ int main() {
     cout << "=====================================\n";
 
     vector<int> workloads = {
-        10000000
+        10000
     };
 
     for (int orders : workloads) {
