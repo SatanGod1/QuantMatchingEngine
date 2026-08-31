@@ -71,17 +71,15 @@ MatchingEngine::submitOrder(const Order& incomingOrder) {
                 tradeQuantity
             );
 
-            Event tradeEvent(
+            events.emplace_back(
                 EventType::TRADE_EXECUTED,
                 incoming.id,
                 sellOrder.id,
                 tradePrice,
-                tradeQuantity);
-
-            tradeEvent.buyOrderId = incoming.id;
-            tradeEvent.sellOrderId = sellOrder.id;
-
-            events.push_back(tradeEvent);
+                tradeQuantity,
+                incoming.id,
+                sellOrder.id
+            );
 
             incoming.quantity -= tradeQuantity;
             sellOrder.quantity -= tradeQuantity;
@@ -132,17 +130,15 @@ MatchingEngine::submitOrder(const Order& incomingOrder) {
                 tradeQuantity
             );
 
-            Event tradeEvent(
+            events.emplace_back(
                 EventType::TRADE_EXECUTED,
                 incoming.id,
                 buyOrder.id,
                 tradePrice,
-                tradeQuantity);
-
-            tradeEvent.buyOrderId = buyOrder.id;
-            tradeEvent.sellOrderId = incoming.id;
-
-            events.push_back(tradeEvent);
+                tradeQuantity,
+                buyOrder.id,
+                incoming.id
+            );
 
             incoming.quantity -= tradeQuantity;
             buyOrder.quantity -= tradeQuantity;

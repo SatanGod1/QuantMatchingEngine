@@ -42,14 +42,16 @@ struct Event {
         OrderId orderId = 0,
         OrderId relatedOrderId = 0,
         int price = 0,
-        int quantity = 0
-    )
+        int quantity = 0,
+        OrderId buyOrderId = 0,
+        OrderId sellOrderId = 0)
         : type(type),
           orderId(orderId),
           relatedOrderId(relatedOrderId),
-          buyOrderId(0),
-          sellOrderId(0),
+          buyOrderId(buyOrderId),
+          sellOrderId(sellOrderId),
           price(price),
           quantity(quantity)
-    {}
+    {
+    }
 };
