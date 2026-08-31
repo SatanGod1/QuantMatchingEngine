@@ -5,8 +5,8 @@
 
 #include <cstddef>
 #include <functional>
+#include <list>
 #include <map>
-#include <unordered_map>
 #include <vector>
 
 class OrderBook {
@@ -14,7 +14,7 @@ class OrderBook {
 private:
 
     static constexpr std::size_t INVALID_INDEX =
-        static_cast<std::size_t>(-1);
+        OrderLocation::INVALID_INDEX;
 
     struct OrderNode {
         Order order;
@@ -32,6 +32,9 @@ private:
               tail(INVALID_INDEX) {}
     };
 
+    /*
+     * Price-level containers remain unchanged in Phase 9.2.
+     */
     std::map<
         int,
         PriceLevel,
@@ -43,23 +46,45 @@ private:
         PriceLevel
     > asks;
 
+    /*
+     * Order storage.
+     */
     std::vector<OrderNode> orderPool;
 
     std::vector<std::size_t> freeSlots;
 
-    std::unordered_map<OrderId, OrderLocation> orderIndex;
+    /*
+     * Direct OrderId -> OrderLocation lookup.
+     *
+     * Because benchmark IDs start at 1, index 0 is unused.
+     */
+    std::vector<OrderLocation> orderIndex;
 
-    std::size_t allocateOrder(const Order& order);
+    /*
+     * Highest bid and lowest ask.
+     */
+    int highestBidPrice;
+    int lowestAskPrice;
+
+    std::size_t allocateOrder(
+        const Order& order
+    );
 
     void removeOrderFromLevel(
         std::size_t index
+    );
+
+    void ensureOrderIndexSize(
+        OrderId orderId
     );
 
 public:
 
     OrderBook();
 
-    void addOrder(const Order& order);
+    void addOrder(
+        const Order& order
+    );
 
     bool empty() const;
 
@@ -77,7 +102,9 @@ public:
 
     void printBook() const;
 
-    bool cancelOrder(OrderId orderId);
+    bool cancelOrder(
+        OrderId orderId
+    );
 
     bool modifyOrder(
         OrderId orderId,
