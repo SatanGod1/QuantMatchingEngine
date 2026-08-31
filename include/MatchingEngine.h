@@ -5,6 +5,7 @@
 #include "Event.h"
 
 #include <vector>
+#include <cstddef>
 
 class MatchingEngine {
 
@@ -13,6 +14,10 @@ private:
     std::vector<Event> events;
 
 public:
+
+    explicit MatchingEngine(
+        std::size_t expectedEvents = 0
+    );
 
     std::vector<Trade> submitOrder(
         const Order& order

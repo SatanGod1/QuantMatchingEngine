@@ -88,7 +88,7 @@ BenchmarkResult runBenchmark(int numberOfOrders) {
 
     for (int repeat = 0; repeat < REPEATS; ++repeat) {
 
-        MatchingEngine engine;
+        MatchingEngine engine(numberOfOrders * 3);
 
         int index =
             min(WARMUP_ORDERS, numberOfOrders);

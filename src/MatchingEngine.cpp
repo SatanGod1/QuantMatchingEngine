@@ -3,6 +3,14 @@
 
 #include <algorithm>
 
+MatchingEngine::MatchingEngine(
+    std::size_t expectedEvents
+) {
+    if (expectedEvents > 0) {
+        events.reserve(expectedEvents);
+    }
+}
+
 const OrderBook& MatchingEngine::getOrderBook() const {
 
     return orderBook;
