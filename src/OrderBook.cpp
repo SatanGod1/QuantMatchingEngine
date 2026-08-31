@@ -2,6 +2,10 @@
 
 #include <iostream>
 
+OrderBook::OrderBook() {
+    orderIndex.reserve(1000000);
+}
+
 void OrderBook::addOrder(const Order &order)
 {
 

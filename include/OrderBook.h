@@ -25,6 +25,8 @@ private:
 
 public:
 
+    OrderBook();
+
     void addOrder(const Order &order);
 
     bool empty() const;
