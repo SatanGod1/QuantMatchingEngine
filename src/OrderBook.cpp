@@ -9,30 +9,25 @@ OrderBook::OrderBook()
 {
     /*
      * IDs are 1-based.
-     *
-     * Start with enough space for the current
-     * development workload. The vector grows
-     * automatically if a larger ID appears.
+     * Index 0 is intentionally unused.
      */
     orderIndex.resize(10001);
 
     /*
-     * Reserve order storage for the current
-     * development workload.
+     * Current development workload.
      */
     orderPool.reserve(10000);
 }
 
 
-/*
- * Make sure an OrderId can be used as a direct
- * vector index.
- */
 void OrderBook::ensureOrderIndexSize(
     OrderId orderId
 )
 {
-    if (orderId >= orderIndex.size()) {
+    if (
+        orderId >=
+        orderIndex.size()
+    ) {
 
         orderIndex.resize(
             static_cast<std::size_t>(orderId) + 1
@@ -45,14 +40,15 @@ std::size_t OrderBook::allocateOrder(
     const Order& order
 )
 {
-    std::size_t index;
-
     if (!freeSlots.empty()) {
 
-        index = freeSlots.back();
+        const std::size_t index =
+            freeSlots.back();
+
         freeSlots.pop_back();
 
-        orderPool[index].order = order;
+        orderPool[index].order =
+            order;
 
         orderPool[index].prev =
             INVALID_INDEX;
@@ -60,19 +56,21 @@ std::size_t OrderBook::allocateOrder(
         orderPool[index].next =
             INVALID_INDEX;
 
-        orderPool[index].active = true;
-    }
-    else {
+        orderPool[index].active =
+            true;
 
-        index = orderPool.size();
-
-        orderPool.push_back({
-            order,
-            INVALID_INDEX,
-            INVALID_INDEX,
-            true
-        });
+        return index;
     }
+
+    const std::size_t index =
+        orderPool.size();
+
+    orderPool.push_back({
+        order,
+        INVALID_INDEX,
+        INVALID_INDEX,
+        true
+    });
 
     return index;
 }
@@ -82,9 +80,10 @@ void OrderBook::addOrder(
     const Order& order
 )
 {
-    /*
-     * We need a valid direct-index entry.
-     */
+    if (order.id == 0) {
+        return;
+    }
+
     ensureOrderIndexSize(order.id);
 
     const std::size_t index =
@@ -94,9 +93,6 @@ void OrderBook::addOrder(
         orderPool[index];
 
 
-    /*
-     * BUY side.
-     */
     if (order.side == Side::BUY) {
 
         auto priceIt =
@@ -117,7 +113,10 @@ void OrderBook::addOrder(
         /*
          * First order at this price.
          */
-        if (level.head == INVALID_INDEX) {
+        if (
+            level.head ==
+            INVALID_INDEX
+        ) {
 
             level.head = index;
             level.tail = index;
@@ -138,9 +137,6 @@ void OrderBook::addOrder(
                 index;
         }
 
-        /*
-         * Update best bid.
-         */
         if (
             highestBidPrice == -1 ||
             order.price > highestBidPrice
@@ -152,9 +148,6 @@ void OrderBook::addOrder(
     }
 
 
-    /*
-     * SELL side.
-     */
     else {
 
         auto priceIt =
@@ -175,7 +168,10 @@ void OrderBook::addOrder(
         /*
          * First order at this price.
          */
-        if (level.head == INVALID_INDEX) {
+        if (
+            level.head ==
+            INVALID_INDEX
+        ) {
 
             level.head = index;
             level.tail = index;
@@ -196,9 +192,6 @@ void OrderBook::addOrder(
                 index;
         }
 
-        /*
-         * Update best ask.
-         */
         if (
             lowestAskPrice == -1 ||
             order.price < lowestAskPrice
@@ -211,9 +204,9 @@ void OrderBook::addOrder(
 
 
     /*
-     * Direct OrderId -> pool index.
+     * PHASE 9.2:
      *
-     * No hashing.
+     * Direct vector indexing instead of hashing.
      */
     orderIndex[
         static_cast<std::size_t>(order.id)
@@ -267,7 +260,9 @@ int OrderBook::bestAsk() const
 Order& OrderBook::bestBidOrder()
 {
     return orderPool[
-        bids.at(highestBidPrice).head
+        bids.at(
+            highestBidPrice
+        ).head
     ].order;
 }
 
@@ -275,7 +270,9 @@ Order& OrderBook::bestBidOrder()
 Order& OrderBook::bestAskOrder()
 {
     return orderPool[
-        asks.at(lowestAskPrice).head
+        asks.at(
+            lowestAskPrice
+        ).head
     ].order;
 }
 
@@ -284,7 +281,10 @@ void OrderBook::removeOrderFromLevel(
     std::size_t index
 )
 {
-    if (index >= orderPool.size()) {
+    if (
+        index >=
+        orderPool.size()
+    ) {
         return;
     }
 
@@ -311,9 +311,6 @@ void OrderBook::removeOrderFromLevel(
         node.next;
 
 
-    /*
-     * Remove from the appropriate price level.
-     */
     if (side == Side::BUY) {
 
         auto priceIt =
@@ -326,7 +323,10 @@ void OrderBook::removeOrderFromLevel(
         PriceLevel& level =
             priceIt->second;
 
-        if (prev != INVALID_INDEX) {
+        if (
+            prev !=
+            INVALID_INDEX
+        ) {
 
             orderPool[prev].next =
                 next;
@@ -337,7 +337,10 @@ void OrderBook::removeOrderFromLevel(
                 next;
         }
 
-        if (next != INVALID_INDEX) {
+        if (
+            next !=
+            INVALID_INDEX
+        ) {
 
             orderPool[next].prev =
                 prev;
@@ -349,17 +352,19 @@ void OrderBook::removeOrderFromLevel(
         }
 
         /*
-         * Entire price level disappeared.
+         * Price level became empty.
          */
-        if (level.head == INVALID_INDEX) {
+        if (
+            level.head ==
+            INVALID_INDEX
+        ) {
 
             bids.erase(priceIt);
 
-            /*
-             * Recalculate best bid only when the
-             * current best level disappeared.
-             */
-            if (price == highestBidPrice) {
+            if (
+                price ==
+                highestBidPrice
+            ) {
 
                 if (bids.empty()) {
 
@@ -388,7 +393,10 @@ void OrderBook::removeOrderFromLevel(
         PriceLevel& level =
             priceIt->second;
 
-        if (prev != INVALID_INDEX) {
+        if (
+            prev !=
+            INVALID_INDEX
+        ) {
 
             orderPool[prev].next =
                 next;
@@ -399,7 +407,10 @@ void OrderBook::removeOrderFromLevel(
                 next;
         }
 
-        if (next != INVALID_INDEX) {
+        if (
+            next !=
+            INVALID_INDEX
+        ) {
 
             orderPool[next].prev =
                 prev;
@@ -411,17 +422,19 @@ void OrderBook::removeOrderFromLevel(
         }
 
         /*
-         * Entire price level disappeared.
+         * Price level became empty.
          */
-        if (level.head == INVALID_INDEX) {
+        if (
+            level.head ==
+            INVALID_INDEX
+        ) {
 
             asks.erase(priceIt);
 
-            /*
-             * Recalculate best ask only when the
-             * current best level disappeared.
-             */
-            if (price == lowestAskPrice) {
+            if (
+                price ==
+                lowestAskPrice
+            ) {
 
                 if (asks.empty()) {
 
@@ -439,18 +452,15 @@ void OrderBook::removeOrderFromLevel(
 
 
     /*
-     * Mark the OrderId entry as invalid.
+     * We don't erase the vector entry.
      *
-     * We do NOT erase the vector element.
+     * Mark it invalid instead.
      */
     orderIndex[
         static_cast<std::size_t>(id)
     ].index = INVALID_INDEX;
 
 
-    /*
-     * Return the order slot to the free list.
-     */
     node.active = false;
 
     node.prev =
@@ -470,7 +480,9 @@ void OrderBook::removeBestBidOrder()
     }
 
     const std::size_t index =
-        bids.at(highestBidPrice).head;
+        bids.at(
+            highestBidPrice
+        ).head;
 
     removeOrderFromLevel(index);
 }
@@ -483,7 +495,9 @@ void OrderBook::removeBestAskOrder()
     }
 
     const std::size_t index =
-        asks.at(lowestAskPrice).head;
+        asks.at(
+            lowestAskPrice
+        ).head;
 
     removeOrderFromLevel(index);
 }
@@ -511,7 +525,8 @@ void OrderBook::printBook() const
             level.head;
 
         while (
-            index != INVALID_INDEX
+            index !=
+            INVALID_INDEX
         ) {
 
             const OrderNode& node =
@@ -552,7 +567,8 @@ void OrderBook::printBook() const
             level.head;
 
         while (
-            index != INVALID_INDEX
+            index !=
+            INVALID_INDEX
         ) {
 
             const OrderNode& node =
@@ -575,6 +591,7 @@ void OrderBook::printBook() const
             << '\n';
     }
 
+
     std::cout
         << "\n================================\n";
 }
@@ -585,7 +602,7 @@ bool OrderBook::cancelOrder(
 )
 {
     /*
-     * Direct vector lookup.
+     * Direct lookup.
      */
     if (
         orderId == 0 ||
@@ -600,7 +617,11 @@ bool OrderBook::cancelOrder(
             static_cast<std::size_t>(orderId)
         ];
 
-    if (location.index == INVALID_INDEX) {
+    if (
+        location.index ==
+        INVALID_INDEX
+    ) {
+
         return false;
     }
 
@@ -636,7 +657,7 @@ bool OrderBook::modifyOrder(
 )
 {
     /*
-     * Direct vector lookup.
+     * Direct lookup.
      */
     if (
         orderId == 0 ||
@@ -651,7 +672,11 @@ bool OrderBook::modifyOrder(
             static_cast<std::size_t>(orderId)
         ];
 
-    if (location.index == INVALID_INDEX) {
+    if (
+        location.index ==
+        INVALID_INDEX
+    ) {
+
         return false;
     }
 
@@ -667,8 +692,8 @@ bool OrderBook::modifyOrder(
     }
 
     if (
-        newQuantity <= 0 ||
-        newPrice <= 0
+        newPrice <= 0 ||
+        newQuantity <= 0
     ) {
 
         return false;
@@ -679,12 +704,14 @@ bool OrderBook::modifyOrder(
 
 
     /*
-     * Quantity decrease at the same price:
-     * preserve time priority.
+     * Quantity decrease at the same
+     * price preserves FIFO priority.
      */
     if (
-        newPrice == currentOrder.price &&
-        newQuantity < currentOrder.quantity
+        newPrice ==
+        currentOrder.price &&
+        newQuantity <
+        currentOrder.quantity
     ) {
 
         currentOrder.quantity =
@@ -696,7 +723,7 @@ bool OrderBook::modifyOrder(
 
     /*
      * Price change or quantity increase:
-     * remove and append at the new level.
+     * remove and reinsert.
      */
     Order updatedOrder(
         currentOrder.id,
@@ -719,8 +746,8 @@ bool OrderBook::validateInvariants() const
      * Best bid < best ask.
      */
     if (
-        !bids.empty() &&
-        !asks.empty()
+        highestBidPrice != -1 &&
+        lowestAskPrice != -1
     ) {
 
         if (
@@ -734,7 +761,7 @@ bool OrderBook::validateInvariants() const
 
 
     /*
-     * Best bid cache.
+     * Cached best bid.
      */
     if (!bids.empty()) {
 
@@ -746,16 +773,16 @@ bool OrderBook::validateInvariants() const
             return false;
         }
     }
-    else {
+    else if (
+        highestBidPrice != -1
+    ) {
 
-        if (highestBidPrice != -1) {
-            return false;
-        }
+        return false;
     }
 
 
     /*
-     * Best ask cache.
+     * Cached best ask.
      */
     if (!asks.empty()) {
 
@@ -767,16 +794,16 @@ bool OrderBook::validateInvariants() const
             return false;
         }
     }
-    else {
+    else if (
+        lowestAskPrice != -1
+    ) {
 
-        if (lowestAskPrice != -1) {
-            return false;
-        }
+        return false;
     }
 
 
     /*
-     * Validate every bid level.
+     * Validate bids.
      */
     for (
         const auto& [price, level]
@@ -794,10 +821,15 @@ bool OrderBook::validateInvariants() const
             INVALID_INDEX;
 
         while (
-            index != INVALID_INDEX
+            index !=
+            INVALID_INDEX
         ) {
 
-            if (index >= orderPool.size()) {
+            if (
+                index >=
+                orderPool.size()
+            ) {
+
                 return false;
             }
 
@@ -832,7 +864,8 @@ bool OrderBook::validateInvariants() const
             }
 
             if (
-                node.prev != previous
+                node.prev !=
+                previous
             ) {
 
                 return false;
@@ -856,7 +889,7 @@ bool OrderBook::validateInvariants() const
 
 
     /*
-     * Validate every ask level.
+     * Validate asks.
      */
     for (
         const auto& [price, level]
@@ -874,10 +907,15 @@ bool OrderBook::validateInvariants() const
             INVALID_INDEX;
 
         while (
-            index != INVALID_INDEX
+            index !=
+            INVALID_INDEX
         ) {
 
-            if (index >= orderPool.size()) {
+            if (
+                index >=
+                orderPool.size()
+            ) {
+
                 return false;
             }
 
@@ -912,7 +950,8 @@ bool OrderBook::validateInvariants() const
             }
 
             if (
-                node.prev != previous
+                node.prev !=
+                previous
             ) {
 
                 return false;
@@ -937,9 +976,6 @@ bool OrderBook::validateInvariants() const
 
     /*
      * Validate direct OrderId index.
-     *
-     * Unlike unordered_map, invalid entries
-     * remain in the vector.
      */
     for (
         std::size_t id = 1;
@@ -967,7 +1003,9 @@ bool OrderBook::validateInvariants() const
         }
 
         const OrderNode& node =
-            orderPool[location.index];
+            orderPool[
+                location.index
+            ];
 
         if (!node.active) {
             return false;

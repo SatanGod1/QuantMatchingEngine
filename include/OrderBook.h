@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <functional>
-#include <list>
 #include <map>
 #include <vector>
 
@@ -17,14 +16,24 @@ private:
         OrderLocation::INVALID_INDEX;
 
     struct OrderNode {
+
         Order order;
+
         std::size_t prev;
+
         std::size_t next;
+
         bool active;
     };
 
+    /*
+     * Price levels remain map-based in Phase 9.2.
+     * We will optimize them separately later.
+     */
     struct PriceLevel {
+
         std::size_t head;
+
         std::size_t tail;
 
         PriceLevel()
@@ -32,9 +41,6 @@ private:
               tail(INVALID_INDEX) {}
     };
 
-    /*
-     * Price-level containers remain unchanged in Phase 9.2.
-     */
     std::map<
         int,
         PriceLevel,
@@ -55,15 +61,14 @@ private:
 
     /*
      * Direct OrderId -> OrderLocation lookup.
-     *
-     * Because benchmark IDs start at 1, index 0 is unused.
      */
     std::vector<OrderLocation> orderIndex;
 
     /*
-     * Highest bid and lowest ask.
+     * Cached best prices.
      */
     int highestBidPrice;
+
     int lowestAskPrice;
 
     std::size_t allocateOrder(
