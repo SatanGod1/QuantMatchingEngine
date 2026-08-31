@@ -3,31 +3,63 @@
 #include "Order.h"
 #include "OrderLocation.h"
 
-#include <list>
+#include <cstddef>
+#include <functional>
 #include <map>
+#include <unordered_map>
+#include <vector>
 
 class OrderBook {
 
 private:
 
+    static constexpr std::size_t INVALID_INDEX =
+        static_cast<std::size_t>(-1);
+
+    struct OrderNode {
+        Order order;
+        std::size_t prev;
+        std::size_t next;
+        bool active;
+    };
+
+    struct PriceLevel {
+        std::size_t head;
+        std::size_t tail;
+
+        PriceLevel()
+            : head(INVALID_INDEX),
+              tail(INVALID_INDEX) {}
+    };
+
     std::map<
         int,
-        std::list<Order>,
+        PriceLevel,
         std::greater<int>
     > bids;
 
     std::map<
         int,
-        std::list<Order>
+        PriceLevel
     > asks;
 
+    std::vector<OrderNode> orderPool;
+
+    std::vector<std::size_t> freeSlots;
+
     std::unordered_map<OrderId, OrderLocation> orderIndex;
+
+    std::size_t allocateOrder(const Order& order);
+
+    void removeOrderFromLevel(
+        std::size_t index
+    );
 
 public:
 
     OrderBook();
 
-    void addOrder(const Order &order);
+    void addOrder(const Order& order);
 
     bool empty() const;
 
@@ -50,7 +82,8 @@ public:
     bool modifyOrder(
         OrderId orderId,
         int newPrice,
-        int newQuantity);
-    
+        int newQuantity
+    );
+
     bool validateInvariants() const;
 };

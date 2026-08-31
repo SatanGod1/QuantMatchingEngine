@@ -2,60 +2,135 @@
 
 #include <iostream>
 
-OrderBook::OrderBook() {
-    orderIndex.reserve(1000000);
-}
-
-void OrderBook::addOrder(const Order &order)
+OrderBook::OrderBook()
 {
+    orderIndex.reserve(1000000);
 
-    if (order.side == Side::BUY)
-    {
-
-        auto &orders = bids[order.price];
-        orders.push_back(order);
-
-        auto it = orders.end();
-        --it;
-
-        orderIndex[order.id] = {
-            order.side,
-            order.price,
-            it};
-    }
-    else
-    {
-
-        auto &orders = asks[order.price];
-        orders.push_back(order);
-
-        auto it = orders.end();
-        --it;
-
-        orderIndex[order.id] = {
-            order.side,
-            order.price,
-            it};
-    }
+    // Reserve some initial order storage so small workloads
+    // don't repeatedly grow the vector.
+    orderPool.reserve(1000000);
 }
 
-bool OrderBook::empty() const {
 
+std::size_t OrderBook::allocateOrder(const Order& order)
+{
+    std::size_t index;
+
+    if (!freeSlots.empty()) {
+
+        index = freeSlots.back();
+        freeSlots.pop_back();
+
+        orderPool[index].order = order;
+        orderPool[index].prev = INVALID_INDEX;
+        orderPool[index].next = INVALID_INDEX;
+        orderPool[index].active = true;
+    }
+    else {
+
+        index = orderPool.size();
+
+        orderPool.push_back({
+            order,
+            INVALID_INDEX,
+            INVALID_INDEX,
+            true
+        });
+    }
+
+    return index;
+}
+
+
+void OrderBook::addOrder(const Order& order)
+{
+    std::size_t index = allocateOrder(order);
+
+    OrderNode& node = orderPool[index];
+
+    if (order.side == Side::BUY) {
+
+        auto priceIt = bids.find(order.price);
+
+        if (priceIt == bids.end()) {
+
+            priceIt = bids.emplace(
+                order.price,
+                PriceLevel{}
+            ).first;
+        }
+
+        PriceLevel& level = priceIt->second;
+
+        if (level.head == INVALID_INDEX) {
+
+            level.head = index;
+            level.tail = index;
+        }
+        else {
+
+            orderPool[level.tail].next = index;
+            node.prev = level.tail;
+
+            level.tail = index;
+        }
+    }
+    else {
+
+        auto priceIt = asks.find(order.price);
+
+        if (priceIt == asks.end()) {
+
+            priceIt = asks.emplace(
+                order.price,
+                PriceLevel{}
+            ).first;
+        }
+
+        PriceLevel& level = priceIt->second;
+
+        if (level.head == INVALID_INDEX) {
+
+            level.head = index;
+            level.tail = index;
+        }
+        else {
+
+            orderPool[level.tail].next = index;
+            node.prev = level.tail;
+
+            level.tail = index;
+        }
+    }
+
+    orderIndex[order.id] = {
+        order.side,
+        order.price,
+        index
+    };
+}
+
+
+bool OrderBook::empty() const
+{
     return bids.empty() && asks.empty();
 }
 
-bool OrderBook::hasBids() const {
 
+bool OrderBook::hasBids() const
+{
     return !bids.empty();
 }
 
-bool OrderBook::hasAsks() const {
 
+bool OrderBook::hasAsks() const
+{
     return !asks.empty();
 }
 
-int OrderBook::bestBid() const {
 
+int OrderBook::bestBid() const
+{
     if (bids.empty()) {
         return 0;
     }
@@ -63,8 +138,9 @@ int OrderBook::bestBid() const {
     return bids.begin()->first;
 }
 
-int OrderBook::bestAsk() const {
 
+int OrderBook::bestAsk() const
+{
     if (asks.empty()) {
         return 0;
     }
@@ -72,86 +148,187 @@ int OrderBook::bestAsk() const {
     return asks.begin()->first;
 }
 
-Order& OrderBook::bestBidOrder() {
 
-    return bids.begin()->second.front();
+Order& OrderBook::bestBidOrder()
+{
+    return orderPool[
+        bids.begin()->second.head
+    ].order;
 }
 
-Order& OrderBook::bestAskOrder() {
 
-    return asks.begin()->second.front();
+Order& OrderBook::bestAskOrder()
+{
+    return orderPool[
+        asks.begin()->second.head
+    ].order;
 }
 
-void OrderBook::removeBestBidOrder() {
 
-    auto& orders = bids.begin()->second;
+void OrderBook::removeOrderFromLevel(
+    std::size_t index
+)
+{
+    OrderNode& node = orderPool[index];
 
-    OrderId id = orders.front().id;
+    OrderId id = node.order.id;
 
-    orders.pop_front();
+    Side side = node.order.side;
+    int price = node.order.price;
+
+    std::size_t prev = node.prev;
+    std::size_t next = node.next;
+
+    if (side == Side::BUY) {
+
+        auto priceIt = bids.find(price);
+
+        if (priceIt == bids.end()) {
+            return;
+        }
+
+        PriceLevel& level = priceIt->second;
+
+        if (prev != INVALID_INDEX) {
+            orderPool[prev].next = next;
+        }
+        else {
+            level.head = next;
+        }
+
+        if (next != INVALID_INDEX) {
+            orderPool[next].prev = prev;
+        }
+        else {
+            level.tail = prev;
+        }
+
+        if (level.head == INVALID_INDEX) {
+            bids.erase(priceIt);
+        }
+    }
+    else {
+
+        auto priceIt = asks.find(price);
+
+        if (priceIt == asks.end()) {
+            return;
+        }
+
+        PriceLevel& level = priceIt->second;
+
+        if (prev != INVALID_INDEX) {
+            orderPool[prev].next = next;
+        }
+        else {
+            level.head = next;
+        }
+
+        if (next != INVALID_INDEX) {
+            orderPool[next].prev = prev;
+        }
+        else {
+            level.tail = prev;
+        }
+
+        if (level.head == INVALID_INDEX) {
+            asks.erase(priceIt);
+        }
+    }
 
     orderIndex.erase(id);
 
-    if (orders.empty()) {
-        bids.erase(bids.begin());
-    }
+    node.active = false;
+    node.prev = INVALID_INDEX;
+    node.next = INVALID_INDEX;
+
+    freeSlots.push_back(index);
 }
 
-void OrderBook::removeBestAskOrder() {
 
-    auto& orders = asks.begin()->second;
-
-    OrderId id = orders.front().id;
-
-    orders.pop_front();
-
-    orderIndex.erase(id);
-
-    if (orders.empty()) {
-        asks.erase(asks.begin());
+void OrderBook::removeBestBidOrder()
+{
+    if (bids.empty()) {
+        return;
     }
+
+    std::size_t index =
+        bids.begin()->second.head;
+
+    removeOrderFromLevel(index);
 }
 
-void OrderBook::printBook() const {
 
+void OrderBook::removeBestAskOrder()
+{
+    if (asks.empty()) {
+        return;
+    }
+
+    std::size_t index =
+        asks.begin()->second.head;
+
+    removeOrderFromLevel(index);
+}
+
+
+void OrderBook::printBook() const
+{
     std::cout << "\n========== ORDER BOOK ==========\n";
 
     std::cout << "\nASKS\n";
     std::cout << "-----------------\n";
 
-    for (const auto& [price, orders] : asks) {
+    for (const auto& [price, level] : asks) {
 
         int totalQuantity = 0;
 
-        for (const auto& order : orders) {
-            totalQuantity += order.quantity;
+        std::size_t index = level.head;
+
+        while (index != INVALID_INDEX) {
+
+            const OrderNode& node = orderPool[index];
+
+            totalQuantity += node.order.quantity;
+
+            index = node.next;
         }
 
-        std::cout << price
-                  << " -> "
-                  << totalQuantity
-                  << '\n';
+        std::cout
+            << price
+            << " -> "
+            << totalQuantity
+            << '\n';
     }
 
     std::cout << "\nBIDS\n";
     std::cout << "-----------------\n";
 
-    for (const auto& [price, orders] : bids) {
+    for (const auto& [price, level] : bids) {
 
         int totalQuantity = 0;
 
-        for (const auto& order : orders) {
-            totalQuantity += order.quantity;
+        std::size_t index = level.head;
+
+        while (index != INVALID_INDEX) {
+
+            const OrderNode& node = orderPool[index];
+
+            totalQuantity += node.order.quantity;
+
+            index = node.next;
         }
 
-        std::cout << price
-                  << " -> "
-                  << totalQuantity
-                  << '\n';
+        std::cout
+            << price
+            << " -> "
+            << totalQuantity
+            << '\n';
     }
 
     std::cout << "\n================================\n";
 }
+
 
 bool OrderBook::cancelOrder(OrderId orderId)
 {
@@ -161,51 +338,20 @@ bool OrderBook::cancelOrder(OrderId orderId)
         return false;
     }
 
-    OrderLocation location = indexIt->second;
+    std::size_t index = indexIt->second.index;
 
-    if (location.side == Side::BUY) {
-
-        auto priceIt = bids.find(location.price);
-
-        if (priceIt == bids.end()) {
-            return false;
-        }
-
-        auto& orders = priceIt->second;
-
-        orders.erase(location.position);
-
-        if (orders.empty()) {
-            bids.erase(priceIt);
-        }
-    }
-    else {
-
-        auto priceIt = asks.find(location.price);
-
-        if (priceIt == asks.end()) {
-            return false;
-        }
-
-        auto& orders = priceIt->second;
-
-        orders.erase(location.position);
-
-        if (orders.empty()) {
-            asks.erase(priceIt);
-        }
-    }
-
-    orderIndex.erase(indexIt);
+    removeOrderFromLevel(index);
 
     return true;
 }
+
 
 bool OrderBook::modifyOrder(
     OrderId orderId,
     int newPrice,
     int newQuantity
-) {
+)
+{
     auto indexIt = orderIndex.find(orderId);
 
     if (indexIt == orderIndex.end()) {
@@ -216,101 +362,52 @@ bool OrderBook::modifyOrder(
         return false;
     }
 
-    OrderLocation location = indexIt->second;
+    std::size_t index = indexIt->second.index;
 
-    // BUY
-    if (location.side == Side::BUY) {
+    Order& currentOrder =
+        orderPool[index].order;
 
-        auto priceIt = bids.find(location.price);
+    /*
+     * Quantity decrease with unchanged price
+     * preserves time priority.
+     */
+    if (
+        newPrice == currentOrder.price &&
+        newQuantity < currentOrder.quantity
+    ) {
 
-        if (priceIt == bids.end()) {
-            return false;
-        }
-
-        auto& orders = priceIt->second;
-        auto it = location.position;
-
-        // Quantity decreased and price unchanged.
-        // Preserve time priority.
-        if (
-            newPrice == it->price &&
-            newQuantity < it->quantity
-        ) {
-            it->quantity = newQuantity;
-            return true;
-        }
-
-        // Otherwise remove and reinsert.
-        Order updatedOrder(
-            it->id,
-            it->side,
-            newPrice,
-            newQuantity
-        );
-
-        orders.erase(it);
-
-        if (orders.empty()) {
-            bids.erase(priceIt);
-        }
-
-        orderIndex.erase(orderId);
-
-        addOrder(updatedOrder);
+        currentOrder.quantity = newQuantity;
 
         return true;
     }
 
-    // SELL
-    else {
+    /*
+     * Price change or quantity increase:
+     * remove and reinsert at the back of
+     * the new price level.
+     */
 
-        auto priceIt = asks.find(location.price);
+    Order updatedOrder(
+        currentOrder.id,
+        currentOrder.side,
+        newPrice,
+        newQuantity
+    );
 
-        if (priceIt == asks.end()) {
-            return false;
-        }
+    removeOrderFromLevel(index);
 
-        auto& orders = priceIt->second;
-        auto it = location.position;
+    addOrder(updatedOrder);
 
-        // Quantity decreased and price unchanged.
-        // Preserve time priority.
-        if (
-            newPrice == it->price &&
-            newQuantity < it->quantity
-        ) {
-            it->quantity = newQuantity;
-            return true;
-        }
-
-        // Otherwise remove and reinsert.
-        Order updatedOrder(
-            it->id,
-            it->side,
-            newPrice,
-            newQuantity
-        );
-
-        orders.erase(it);
-
-        if (orders.empty()) {
-            asks.erase(priceIt);
-        }
-
-        orderIndex.erase(orderId);
-
-        addOrder(updatedOrder);
-
-        return true;
-    }
+    return true;
 }
 
-bool OrderBook::validateInvariants() const {
 
-    // --------------------------------------------------------
-    // Invariant 1:
-    // If both sides exist, best bid must be less than best ask.
-    // --------------------------------------------------------
+bool OrderBook::validateInvariants() const
+{
+    /*
+     * Invariant 1:
+     * Best bid must be strictly less than best ask.
+     */
 
     if (!bids.empty() && !asks.empty()) {
 
@@ -323,70 +420,148 @@ bool OrderBook::validateInvariants() const {
     }
 
 
-    // --------------------------------------------------------
-    // Invariant 2:
-    // Every bid order must have positive quantity.
-    // --------------------------------------------------------
+    /*
+     * Invariant 2:
+     * Validate all bid price levels and FIFO links.
+     */
 
-    for (const auto& [price, orders] : bids) {
-
-        if (price <= 0) {
-            return false;
-        }
-
-        for (const auto& order : orders) {
-
-            if (order.quantity <= 0) {
-                return false;
-            }
-
-            if (order.side != Side::BUY) {
-                return false;
-            }
-
-            if (order.price != price) {
-                return false;
-            }
-        }
-    }
-
-
-    // --------------------------------------------------------
-    // Invariant 3:
-    // Every ask order must have positive quantity.
-    // --------------------------------------------------------
-
-    for (const auto& [price, orders] : asks) {
+    for (const auto& [price, level] : bids) {
 
         if (price <= 0) {
             return false;
         }
 
-        for (const auto& order : orders) {
+        std::size_t index = level.head;
 
-            if (order.quantity <= 0) {
+        std::size_t previous = INVALID_INDEX;
+
+        while (index != INVALID_INDEX) {
+
+            if (index >= orderPool.size()) {
                 return false;
             }
 
-            if (order.side != Side::SELL) {
+            const OrderNode& node =
+                orderPool[index];
+
+            if (!node.active) {
                 return false;
             }
 
-            if (order.price != price) {
+            if (node.order.quantity <= 0) {
                 return false;
             }
+
+            if (node.order.side != Side::BUY) {
+                return false;
+            }
+
+            if (node.order.price != price) {
+                return false;
+            }
+
+            if (node.prev != previous) {
+                return false;
+            }
+
+            previous = index;
+
+            index = node.next;
+        }
+
+        if (level.tail != previous) {
+            return false;
         }
     }
 
 
-    // --------------------------------------------------------
-    // Invariant 4:
-    // Every indexed order must have a valid location.
-    // --------------------------------------------------------
+    /*
+     * Invariant 3:
+     * Validate all ask price levels and FIFO links.
+     */
+
+    for (const auto& [price, level] : asks) {
+
+        if (price <= 0) {
+            return false;
+        }
+
+        std::size_t index = level.head;
+
+        std::size_t previous = INVALID_INDEX;
+
+        while (index != INVALID_INDEX) {
+
+            if (index >= orderPool.size()) {
+                return false;
+            }
+
+            const OrderNode& node =
+                orderPool[index];
+
+            if (!node.active) {
+                return false;
+            }
+
+            if (node.order.quantity <= 0) {
+                return false;
+            }
+
+            if (node.order.side != Side::SELL) {
+                return false;
+            }
+
+            if (node.order.price != price) {
+                return false;
+            }
+
+            if (node.prev != previous) {
+                return false;
+            }
+
+            previous = index;
+
+            index = node.next;
+        }
+
+        if (level.tail != previous) {
+            return false;
+        }
+    }
+
+
+    /*
+     * Invariant 4:
+     * Every indexed order must point to an
+     * active order with matching metadata.
+     */
 
     for (const auto& [orderId, location] : orderIndex) {
 
         if (orderId == 0) {
+            return false;
+        }
+
+        if (location.index >= orderPool.size()) {
+            return false;
+        }
+
+        const OrderNode& node =
+            orderPool[location.index];
+
+        if (!node.active) {
+            return false;
+        }
+
+        if (node.order.id != orderId) {
+            return false;
+        }
+
+        if (node.order.side != location.side) {
+            return false;
+        }
+
+        if (node.order.price != location.price) {
             return false;
         }
     }

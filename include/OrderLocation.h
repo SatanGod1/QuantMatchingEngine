@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Order.h"
-#include <list>
+#include <cstddef>
 
 struct OrderLocation {
     Side side;
     int price;
-    std::list<Order>::iterator position;
+    std::size_t index;
 };
