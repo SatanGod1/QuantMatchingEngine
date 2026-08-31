@@ -12,17 +12,31 @@ void OrderBook::addOrder(const Order &order)
     if (order.side == Side::BUY)
     {
 
-        bids[order.price].push_back(order);
+        auto &orders = bids[order.price];
+        orders.push_back(order);
+
+        auto it = orders.end();
+        --it;
+
+        orderIndex[order.id] = {
+            order.side,
+            order.price,
+            it};
     }
     else
     {
 
-        asks[order.price].push_back(order);
-    }
+        auto &orders = asks[order.price];
+        orders.push_back(order);
 
-    orderIndex[order.id] = {
-        order.side,
-        order.price};
+        auto it = orders.end();
+        --it;
+
+        orderIndex[order.id] = {
+            order.side,
+            order.price,
+            it};
+    }
 }
 
 bool OrderBook::empty() const {
@@ -139,8 +153,8 @@ void OrderBook::printBook() const {
     std::cout << "\n================================\n";
 }
 
-bool OrderBook::cancelOrder(OrderId orderId) {
-
+bool OrderBook::cancelOrder(OrderId orderId)
+{
     auto indexIt = orderIndex.find(orderId);
 
     if (indexIt == orderIndex.end()) {
@@ -159,23 +173,12 @@ bool OrderBook::cancelOrder(OrderId orderId) {
 
         auto& orders = priceIt->second;
 
-        for (auto it = orders.begin(); it != orders.end(); ++it) {
+        orders.erase(location.position);
 
-            if (it->id == orderId) {
-
-                orders.erase(it);
-
-                if (orders.empty()) {
-                    bids.erase(priceIt);
-                }
-
-                orderIndex.erase(indexIt);
-
-                return true;
-            }
+        if (orders.empty()) {
+            bids.erase(priceIt);
         }
     }
-
     else {
 
         auto priceIt = asks.find(location.price);
@@ -186,24 +189,16 @@ bool OrderBook::cancelOrder(OrderId orderId) {
 
         auto& orders = priceIt->second;
 
-        for (auto it = orders.begin(); it != orders.end(); ++it) {
+        orders.erase(location.position);
 
-            if (it->id == orderId) {
-
-                orders.erase(it);
-
-                if (orders.empty()) {
-                    asks.erase(priceIt);
-                }
-
-                orderIndex.erase(indexIt);
-
-                return true;
-            }
+        if (orders.empty()) {
+            asks.erase(priceIt);
         }
     }
 
-    return false;
+    orderIndex.erase(indexIt);
+
+    return true;
 }
 
 bool OrderBook::modifyOrder(
@@ -211,7 +206,6 @@ bool OrderBook::modifyOrder(
     int newPrice,
     int newQuantity
 ) {
-
     auto indexIt = orderIndex.find(orderId);
 
     if (indexIt == orderIndex.end()) {
@@ -224,10 +218,7 @@ bool OrderBook::modifyOrder(
 
     OrderLocation location = indexIt->second;
 
-    /*
-     * Find the existing order.
-     */
-
+    // BUY
     if (location.side == Side::BUY) {
 
         auto priceIt = bids.find(location.price);
@@ -237,52 +228,40 @@ bool OrderBook::modifyOrder(
         }
 
         auto& orders = priceIt->second;
+        auto it = location.position;
 
-        for (auto it = orders.begin(); it != orders.end(); ++it) {
-
-            if (it->id == orderId) {
-
-                /*
-                 * Quantity decreased and price unchanged.
-                 * Preserve time priority.
-                 */
-
-                if (
-                    newPrice == it->price &&
-                    newQuantity < it->quantity
-                ) {
-
-                    it->quantity = newQuantity;
-
-                    return true;
-                }
-
-                /*
-                 * Otherwise remove and reinsert.
-                 */
-
-                Order updatedOrder(
-                    it->id,
-                    it->side,
-                    newPrice,
-                    newQuantity
-                );
-
-                orders.erase(it);
-
-                if (orders.empty()) {
-                    bids.erase(priceIt);
-                }
-
-                orderIndex.erase(orderId);
-
-                addOrder(updatedOrder);
-
-                return true;
-            }
+        // Quantity decreased and price unchanged.
+        // Preserve time priority.
+        if (
+            newPrice == it->price &&
+            newQuantity < it->quantity
+        ) {
+            it->quantity = newQuantity;
+            return true;
         }
+
+        // Otherwise remove and reinsert.
+        Order updatedOrder(
+            it->id,
+            it->side,
+            newPrice,
+            newQuantity
+        );
+
+        orders.erase(it);
+
+        if (orders.empty()) {
+            bids.erase(priceIt);
+        }
+
+        orderIndex.erase(orderId);
+
+        addOrder(updatedOrder);
+
+        return true;
     }
 
+    // SELL
     else {
 
         auto priceIt = asks.find(location.price);
@@ -292,53 +271,38 @@ bool OrderBook::modifyOrder(
         }
 
         auto& orders = priceIt->second;
+        auto it = location.position;
 
-        for (auto it = orders.begin(); it != orders.end(); ++it) {
-
-            if (it->id == orderId) {
-
-                /*
-                 * Quantity decreased and price unchanged.
-                 * Preserve time priority.
-                 */
-
-                if (
-                    newPrice == it->price &&
-                    newQuantity < it->quantity
-                ) {
-
-                    it->quantity = newQuantity;
-
-                    return true;
-                }
-
-                /*
-                 * Otherwise remove and reinsert.
-                 */
-
-                Order updatedOrder(
-                    it->id,
-                    it->side,
-                    newPrice,
-                    newQuantity
-                );
-
-                orders.erase(it);
-
-                if (orders.empty()) {
-                    asks.erase(priceIt);
-                }
-
-                orderIndex.erase(orderId);
-
-                addOrder(updatedOrder);
-
-                return true;
-            }
+        // Quantity decreased and price unchanged.
+        // Preserve time priority.
+        if (
+            newPrice == it->price &&
+            newQuantity < it->quantity
+        ) {
+            it->quantity = newQuantity;
+            return true;
         }
-    }
 
-    return false;
+        // Otherwise remove and reinsert.
+        Order updatedOrder(
+            it->id,
+            it->side,
+            newPrice,
+            newQuantity
+        );
+
+        orders.erase(it);
+
+        if (orders.empty()) {
+            asks.erase(priceIt);
+        }
+
+        orderIndex.erase(orderId);
+
+        addOrder(updatedOrder);
+
+        return true;
+    }
 }
 
 bool OrderBook::validateInvariants() const {

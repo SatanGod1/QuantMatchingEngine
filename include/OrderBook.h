@@ -3,7 +3,7 @@
 #include "Order.h"
 #include "OrderLocation.h"
 
-#include <deque>
+#include <list>
 #include <map>
 
 class OrderBook {
@@ -12,13 +12,13 @@ private:
 
     std::map<
         int,
-        std::deque<Order>,
+        std::list<Order>,
         std::greater<int>
     > bids;
 
     std::map<
         int,
-        std::deque<Order>
+        std::list<Order>
     > asks;
 
     std::unordered_map<OrderId, OrderLocation> orderIndex;
